@@ -41,7 +41,7 @@ Built for Tadi's demo - helps property owners maximize value through ADUs, lot s
 ### Tech Stack
 - **Frontend**: React, Vite, Tailwind CSS, shadcn/ui, Framer Motion, Mapbox GL JS
 - **Backend**: Node.js, Express, Anthropic Claude API
-- **Data**: Dallas Open Data (Socrata API), Mapbox
+- **Data**: Dallas City Hall ArcGIS (zoning), Mapbox (geocoding)
 
 ## Setup & Run
 
@@ -164,22 +164,68 @@ These addresses work well for demos:
 - **4511 Swiss Ave, Dallas, TX 75204** - Historic Swiss Avenue (residential)
 - **6910 Lakewood Blvd, Dallas, TX 75214** - Lakewood area (residential)
 
-## Deployment
+## Deployment (VM + Nginx)
 
-### Frontend (Vercel)
+### 1. On your VM, clone and install
+
 ```bash
-cd frontend
-vercel
+git clone <your-repo-url> /var/www/property-max
+cd /var/www/property-max
+npm run install:all
 ```
 
-### Backend (Railway)
+### 2. Set up environment files
+
 ```bash
-cd backend
-railway init
-railway up
+cp .env.example backend/.env
+cp frontend/.env.example frontend/.env
+# Edit both with your real keys
 ```
 
-Update frontend `.env` with production API URL.
+In `frontend/.env`, set `VITE_API_BASE_URL` to your domain:
+```bash
+VITE_API_BASE_URL=https://yourdomain.com
+VITE_MAPBOX_TOKEN=pk.eyJ1...   # public token (pk.)
+```
+
+### 3. Build the frontend
+
+```bash
+npm run build
+# Output goes to frontend/dist/
+```
+
+### 4. Start the backend with PM2
+
+```bash
+npm install -g pm2
+cd /var/www/property-max/backend
+NODE_ENV=production PORT=31900 pm2 start src/server.js --name property-max
+pm2 save
+pm2 startup
+```
+
+The backend serves both the API (`/api/*`) and the built frontend (`frontend/dist/`) in production mode from port 31900.
+
+### 5. Nginx config
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:31900;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Then: `sudo nginx -t && sudo systemctl reload nginx`
 
 ## API Keys Needed
 
